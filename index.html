@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Califica tu experiencia</title>
+<style>
+  :root { --accent:#1f6f5c; --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1b; --muted:#6b6b66; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161614; --card:#222220; --text:#f1f0ec; --muted:#a3a39c; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; display:flex; justify-content:center; padding:24px 16px; }
+  main { width:100%; max-width:420px; }
+  .card { background:var(--card); border-radius:16px; padding:28px 22px; }
+  .logo { width:72px; height:72px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; margin:0 auto 14px; overflow:hidden; }
+  .logo img { width:100%; height:100%; object-fit:cover; }
+  h1 { font-size:1.35rem; text-align:center; margin:0 0 6px; }
+  .sub { text-align:center; color:var(--muted); margin:0 0 22px; font-size:.95rem; }
+  .btn { display:block; width:100%; padding:15px; border-radius:12px; font-size:1rem; font-weight:600; text-align:center; text-decoration:none; border:2px solid var(--accent); cursor:pointer; font-family:inherit; }
+  .btn.main { background:var(--accent); color:#fff; }
+  .btn.alt { background:transparent; color:var(--accent); margin-top:12px; }
+  .btn:focus-visible, .star:focus-visible, textarea:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .stars { display:flex; justify-content:center; gap:6px; margin:6px 0 16px; }
+  .star { background:none; border:0; font-size:2.4rem; line-height:1; cursor:pointer; color:#bdbdb6; padding:2px 4px; }
+  .star.on { color:#e0a100; }
+  textarea { width:100%; min-height:96px; border-radius:10px; border:1px solid #c9c9c2; padding:12px; font:inherit; background:transparent; color:var(--text); resize:vertical; }
+  .back { background:none; border:0; color:var(--muted); cursor:pointer; margin-top:14px; font:inherit; width:100%; }
+  .hp { position:absolute; left:-9999px; }
+  .msg { text-align:center; }
+  .note { color:var(--muted); font-size:.85rem; text-align:center; margin-top:16px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <div class="logo" id="logo"></div>
+    <h1 id="name"></h1>
+
+    <!-- Pantalla 1: elegir -->
+    <section id="choose">
+      <p class="sub">¿Cómo fue tu experiencia? Elige una opción.</p>
+      <a class="btn main" id="gbtn" href="#" target="_blank" rel="noopener">⭐ Dejar reseña en Google</a>
+      <button class="btn alt" id="pbtn" type="button">💬 Contarle algo al local en privado</button>
+    </section>
+
+    <!-- Pantalla 2: formulario privado -->
+    <section id="form" hidden>
+      <p class="sub">Tu opinión llega directo al dueño. Es anónima.</p>
+      <div class="stars" id="stars" role="radiogroup" aria-label="Calificación"></div>
+      <textarea id="comment" maxlength="500" placeholder="Comentario (opcional)" aria-label="Comentario"></textarea>
+      <input class="hp" id="hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button class="btn main" id="send" type="button" style="margin-top:14px">Enviar opinión</button>
+      <p class="note" id="err" hidden></p>
+      <button class="back" id="back" type="button">Volver</button>
+    </section>
+
+    <!-- Pantalla 3: gracias -->
+    <section id="thanks" class="msg" hidden>
+      <p class="sub" style="font-size:1.05rem">¡Gracias! Tu opinión ya llegó al local.</p>
+    </section>
+  </div>
+  <p class="note" id="foot"></p>
+</main>
+
+<script>
+/* ============ CONFIGURACIÓN POR RESTAURANTE ============
+   Para agregar un cliente nuevo, copia un bloque y cambia la clave.
+   Se abre con: tudominio.com/?r=clave
+   endpoint = enlace de su Apps Script (ver apps-script.gs). Vacío = modo demo. */
+const RESTAURANTES = {
+  demo: {
+    nombre: "Broastería Demo",
+    logo: "",                       // URL de imagen (opcional). Vacío = inicial del nombre
+    color: "#1f6f5c",
+    google: "https://search.google.com/local/writereview?placeid=PON_AQUI_EL_PLACE_ID",
+    endpoint: ""
+  }
+};
+
+(function () {
+  const $ = id => document.getElementById(id);
+  const clave = new URLSearchParams(location.search).get("r") || "demo";
+  const cfg = RESTAURANTES[clave];
+
+  if (!cfg) {
+    $("name").textContent = "Enlace no válido";
+    $("choose").innerHTML = '<p class="sub">Revisa el QR o pide uno nuevo al local.</p>';
+    return;
+  }
+
+  document.title = "Califica a " + cfg.nombre;
+  document.documentElement.style.setProperty("--accent", cfg.color || "#1f6f5c");
+  $("name").textContent = cfg.nombre;
+  if (cfg.logo) { const i = new Image(); i.src = cfg.logo; i.alt = cfg.nombre; $("logo").appendChild(i); }
+  else { $("logo").textContent = cfg.nombre.trim().charAt(0).toUpperCase(); }
+  $("gbtn").href = cfg.google;
+
+  // Estrellas
+  let nota = 0;
+  const cont = $("stars");
+  for (let n = 1; n <= 5; n++) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "star"; b.textContent = "★";
+    b.setAttribute("role", "radio"); b.setAttribute("aria-label", n + " de 5");
+    b.onclick = () => { nota = n; pintar(); };
+    cont.appendChild(b);
+  }
+  function pintar() { [...cont.children].forEach((b, i) => b.classList.toggle("on", i < nota)); }
+
+  const ver = id => { ["choose", "form", "thanks"].forEach(s => $(s).hidden = s !== id); };
+  $("pbtn").onclick = () => ver("form");
+  $("back").onclick = () => ver("choose");
+
+  // Un envío por dispositivo y por local (conveniencia, no seguridad)
+  const llave = "enviado_" + clave;
+  try { if (localStorage.getItem(llave)) ver("thanks"); } catch (e) {}
+
+  $("send").onclick = async () => {
+    const err = $("err"); err.hidden = true;
+    if (!nota) { err.textContent = "Elige de 1 a 5 estrellas."; err.hidden = false; return; }
+    if ($("hp").value) { ver("thanks"); return; }               // bots
+
+    const datos = { restaurante: clave, estrellas: nota, comentario: $("comment").value.trim() };
+    $("send").disabled = true;
+    try {
+      if (cfg.endpoint) {
+        await fetch(cfg.endpoint, { method: "POST", mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(datos) });
+      } else { console.log("Modo demo, no se guardó:", datos); }
+      try { localStorage.setItem(llave, "1"); } catch (e) {}
+      ver("thanks");
+    } catch (e) {
+      err.textContent = "No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.";
+      err.hidden = false; $("send").disabled = false;
+    }
+  };
+})();
+</script>
+</body>
+</html>
